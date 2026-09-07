@@ -163,6 +163,9 @@ class SimDevice(threading.Thread):
                    "hr_estimated": round(hr, 1), "imu_accel_mean": round(mo, 4),
                    "imu_gyro_mean": 0.001, "temperature": round(36.4 + self.rng.gauss(0, 0.08), 2),
                    "signal_quality": int(sq), "wifi_rssi": -58,
+                   "accel_x_mean": round(self.rng.gauss(0, 0.05), 3),
+                   "accel_y_mean": round(self.rng.gauss(0, 0.05), 3),
+                   "accel_z_mean": round(self.az_for(name), 3),
                    "fw_version": "1.4.0-sim", "battery_pct": 80}
             c.publish(f"miaowa/{self.dev}/data", json.dumps(pkt), qos=1)
 
@@ -176,6 +179,16 @@ class SimDevice(threading.Thread):
         c.loop_stop()
         c.disconnect()
         conn.close()
+
+    def az_for(self, scenario):
+        r = self.rng.random()
+        if scenario in ("deep_sleep", "light_sleep"):
+            if r < 0.75: return -0.9 + self.rng.gauss(0, 0.05)
+            if r < 0.90: return self.rng.gauss(0, 0.15)
+            return 0.9 + self.rng.gauss(0, 0.05)
+        if scenario == "cry":
+            return 0.9 + self.rng.gauss(0, 0.08)
+        return self.rng.gauss(0.1, 0.3)
 
     def on_transition(self, conn, new_scenario, seg_start, pending_marks):
         ts_ms = int(seg_start * 1000)

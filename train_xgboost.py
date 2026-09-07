@@ -29,8 +29,9 @@ FEATURE_COLS = [
     "temp_mean", "temp_trend", "signal_quality_avg",
     "time_of_day", "is_night", "hours_since_feeding", "hours_since_sleep",
 ]
-FEATURE_SPEC_VERSION = "1.4.0"
-POSTURE_MAP = {"still": 0, "low": 1, "high": 2}
+FEATURE_SPEC_VERSION = "1.5.0"
+# posture 数字编码（ADR-0002）：DB 列为 smallint，0/1/2/3 直传；兼容历史字符串值
+POSTURE_MAP = {"supine": 0, "side": 1, "prone": 2, "active": 3}
 MAX_DEVICE_SHARE = 0.25
 
 
@@ -49,7 +50,8 @@ def load_data(pg_url: str) -> pd.DataFrame:
         """, engine)
     if df.empty:
         sys.exit("training_features 无数据，请先积累样本（自动对照采样 + 弱标注）")
-    df["posture_code"] = df["posture"].map(POSTURE_MAP).fillna(0)
+    df["posture_code"] = df["posture"].apply(
+        lambda v: POSTURE_MAP.get(v) if isinstance(v, str) else v)  # None/未映射保留 NaN
     return df
 
 

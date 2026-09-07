@@ -2,7 +2,7 @@
 
 妙娃 AI 模型上下文：单 XGBoost 风险评分模型从样本构造、训练、评估、ONNX 导出到灰度上线的完整机制。代码分布：`miaowa-model/`（离线管线 + 模拟器，Python，唯一源头）+ `miaowa-repo/backend`（在线推理与融合，Java）。
 
-**口径权威**：《算法特征定义与数据字典 — MVP v1.4》是特征/标签/阈值/权重的唯一口径来源，任何修改必须先改该文档并升 `feature_spec_version`（当前 = 1.4.0）。
+**口径权威**：《算法特征定义与数据字典 — MVP v1.4》是唯一口径来源，任何修改必须先改该文档并升 `feature_spec_version`（当前 = **1.5.0**，posture 真姿态化，见 ADR-0002）。
 
 ## Language
 
@@ -68,5 +68,5 @@ _注意_：本机宿主 Redis 抢占 127.0.0.1:6379，指针读写必须走 `doc
 
 - ~~样本 label 口径~~ → 数据字典为准：1.0 / 0.0 / 0.3-0.5，代码 0.9/0.1/0.5 作废。
 - ~~"Shadow" 双重含义~~ → `ShadowService`=设备影子；`ModelShadowService`=模型影子（灰度第一阶段）。
-- ~~`posture` 语义冲突~~ → MVP 无摄像头、数据包无方向字段，用 motion_mean 代理（still/low/high→0/1/2），见 docs/adr/0001。
+- ~~`posture` 语义冲突~~ → ~~motion 代理~~ **二次裁决（2026-09-07）**：IMU accel 三分量 + 固定轴阈值判真姿态（0仰卧/1侧卧/2俯卧/3活动），硬件固定左脚佩戴，见 docs/adr/0002（作废 0001）。
 - ~~`time_of_day` sin/cos 矛盾~~ → 保持 15 维，原始小时 0-23，字典删 sin/cos 表述。

@@ -96,3 +96,8 @@ P0 → P3 ──────┤（P1/P2 与 P3 可并行：Java vs Python）
 | P6 灰度演练 | ✅ | Shadow 一致率 80.7%≥70%；low 阶段误推 0 不升；target 融合准确率 83.3%≥60%；回滚 3s≤30s；e2e 48/48 全绿 |
 
 备注：本机宿主 Redis 抢占 6379，miaowa 指针读写一律 `docker exec miaowa-redis redis-cli`（publish_model.py 已内置）。
+
+## 真姿态改造（2026-09-07，ADR-0002）
+
+IMU 六轴可用 → posture 从 motion 代理升级为 accel_z 固定轴真姿态（0仰卧/1侧卧/2俯卧/3活动）；硬件固定左脚佩戴，轴映射为 3 常量（假设 z 轴仰卧 -1g），硬件到位后实测修正。契约升 1.5.0，模型 risk_model_20260907.onnx 已发布上线，e2e 51/51 全绿（新增 J1-J3）。校准制方案曾评估后放弃（硬件朝向锁死）。
+TODO(硬件)：六面静置测试确认 IMU 轴定义 → 修正 FeatureService 常量。

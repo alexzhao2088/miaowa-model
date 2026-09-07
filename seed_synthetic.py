@@ -26,7 +26,8 @@ def sample(label, motion, hr, sq=None):
         "motion_mean": motion + random.gauss(0, 0.01),
         "motion_std": abs(random.gauss(0.02, 0.01)),
         "motion_max": motion * 1.5 + abs(random.gauss(0, 0.02)),
-        "posture": "still" if motion < 0.03 else ("low" if motion < 0.15 else "high"),
+        # posture 列为 smallint 数字编码（ADR-0002）：0 supine / 1 side / 2 prone / 3 active
+        "posture": (3 if motion >= 0.15 else random.choice([0, 1, 2, 0, 1] if label < 0.7 else [2, 1, 0, 2, 1])),
         "temp_mean": 36.4 + random.gauss(0, 0.1),
         "temp_trend": random.gauss(0, 0.02),
         "signal_quality_avg": sq,
