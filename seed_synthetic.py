@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """合成训练样本生成（验证训练管线 + ONNX 推理闭环用，真实数据到位后废弃）
 比例：anchor:contrast:transition = 1:1.5:0.5；label 口径 1.0/0.0/0.3-0.5；
-特征列按契约 v1.4.0（is_night/hours_since_*，弃 hr_max/time_since_last_event）；
+特征列按契约 v1.5.0（is_night/hours_since_*，posture 数字编码见 ADR-0002）；
 另生成少量 label_source='golden' 高分段样本供 evaluate.py 黄金集验证。
 """
 import random

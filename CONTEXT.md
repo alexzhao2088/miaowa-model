@@ -1,6 +1,6 @@
 # Miaowa Model Context
 
-妙娃 AI 模型上下文：单 XGBoost 风险评分模型从样本构造、训练、评估、ONNX 导出到灰度上线的完整机制。代码分布：`miaowa-model/`（离线管线 + 模拟器，Python，唯一源头）+ `miaowa-repo/backend`（在线推理与融合，Java）。
+妙娃 AI 模型上下文：单 XGBoost 风险评分模型从样本构造、训练、评估、ONNX 导出到灰度上线的完整机制。代码分布：`miaowa-model/`（离线管线 + 模拟器，Python，唯一源头）+ `miaowa-backend`（在线推理与融合，Java）。
 
 **口径权威**：《算法特征定义与数据字典 — MVP v1.4》是唯一口径来源，任何修改必须先改该文档并升 `feature_spec_version`（当前 = **1.5.0**，posture 真姿态化，见 ADR-0002）。
 

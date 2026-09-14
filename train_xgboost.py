@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-妙娃风险评分模型训练脚本（特征契约 v1.4.0，15 维）
+妙娃风险评分模型训练脚本（特征契约 v1.5.0，15 维，posture 数字编码见 ADR-0002）
 数据：training_features（锚点 1.0 / 对照 0.0 / 中间 0.3-0.5，配比 1:1.5:0.5）
 规则：
   - 质量分级：A 级=人工锚点(label_source=weak_label)且 sq≥70 -> 权重 1.0；
@@ -22,7 +22,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-# 特征契约 v1.4.0（顺序即 ONNX 输入顺序，改动必须升 FEATURE_SPEC_VERSION 并重训）
+# 特征契约 v1.5.0（顺序即 ONNX 输入顺序，改动必须升 FEATURE_SPEC_VERSION 并重训）
 FEATURE_COLS = [
     "hr_mean", "hr_std", "hr_trend", "hrv_rmssd",
     "motion_mean", "motion_max", "motion_std", "posture_code",
