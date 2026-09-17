@@ -158,7 +158,7 @@ class SimDevice(threading.Thread):
             if self.rng.random() < 0.003:
                 hr += self.rng.uniform(8, 15)
 
-            pkt = {"device_id": self.dev, "timestamp": int(now * 1000),
+            pkt = {"device_id": self.dev, "timestamp": int(now),  # 后端按 Unix 秒解析（ofEpochSecond）
                    "ppg_mean": 512.0, "ppg_std": 18.0,
                    "hr_estimated": round(hr, 1), "imu_accel_mean": round(mo, 4),
                    "imu_gyro_mean": 0.001, "temperature": round(36.4 + self.rng.gauss(0, 0.08), 2),
@@ -211,24 +211,25 @@ class SimDevice(threading.Thread):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--devices", type=int, default=3)
+    ap.add_argument("--ids", type=str, default="", help="自定义设备ID（逗号分隔，覆盖 --devices）")
     ap.add_argument("--day-min", type=float, default=360, help="压缩后一昼夜的真实分钟数")
     ap.add_argument("--duration-min", type=float, default=360, help="总运行时长（真实分钟）")
     ap.add_argument("--skip-bootstrap", action="store_true")
     args = ap.parse_args()
 
-    ids = [f"MW-SIM-{i+1}" for i in range(args.devices)]
+    ids = [s.strip() for s in args.ids.split(",") if s.strip()] or [f"MW-SIM-{i+1}" for i in range(args.devices)]
     if not args.skip_bootstrap:
         print("bootstrap EMQX 模拟设备账号与 ACL ...")
         emqx_bootstrap(ids)
 
-    # sensor_data 等表有 device_id 外键：先登记模拟设备（幂等）
+    # 契约 2.0.0：devices 表（bind_code 非空，唯一键 device_id）；已存在则跳过
     conn = psycopg2.connect(PG)
     cur = conn.cursor()
     for d in ids:
         cur.execute("""
-            INSERT INTO device(device_id, device_token, fw_version)
+            INSERT INTO devices(device_id, bind_code, fw_version)
             VALUES (%s, %s, '1.4.0-sim') ON CONFLICT (device_id) DO NOTHING
-            """, (d, f"{d}_sim_2026"))
+            """, (d, f"SIM{d[-4:].upper().replace('-', 'X')[:5]}"[:8]))
     conn.commit()
     cur.close()
     conn.close()
