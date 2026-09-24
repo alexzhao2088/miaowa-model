@@ -1,0 +1,5 @@
+# Held-out Script Pool 设备清单（ADR-0003 决策 2：剧本池 8:2 切分）
+# 这些设备跑 held-out 剧本，样本仅供 evaluate.py 抗过拟合评估，绝不进训练
+# train_xgboost.py 读取本文件并将这些设备的样本剔除出训练池
+MW-HOLD-1
+MW-HOLD-2

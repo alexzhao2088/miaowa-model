@@ -1,0 +1,10 @@
+# 模拟器设备清单（ADR-0003 决策 3：Domain 划分，零 DB 迁移）
+# train_xgboost.py / evaluate.py 读取：清单内设备 domain=simulator，清单外默认 real
+# 每行一个 device_id，# 开头为注释
+MW-SIM-1
+MW-SIM-2
+MW-SIM-3
+MW-SIM-4
+MW-SIM-5
+MW-HOLD-1
+MW-HOLD-2

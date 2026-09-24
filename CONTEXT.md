@@ -47,6 +47,20 @@ _注意_：本机宿主 Redis 抢占 127.0.0.1:6379，指针读写必须走 `doc
 **Device Simulator (虚拟设备模拟器)**:
 `miaowa-model/device_simulator.py`，按婴儿昼夜节律剧本经 MQTT 发 5 秒包（3-5 虚拟设备并行），剧本场景切换点即 ground truth，同时模拟家长打点（80% 打点率 / 70% 弱标注 / 0-10min 随机延迟）。
 
+**Domain (域)**:
+样本的来源域，二值：`simulator`（模拟器设备产生）或 `real`（真实婴儿设备产生）。按 `miaowa-model/simulator_devices.txt` 设备清单划分，清单外设备默认 real。`training_features` 不加列、不改 DB。混合训练时 real 域权重 ×2.0，simulator 域权重 = max(0.3, 1 − 2×real 样本占比)。
+_Avoid_: 与 label_source（weak_label/auto_sample/alert_feedback/synthetic/golden）混淆——label_source 是标注机制，Domain 是设备来源；模拟器样本的 label_source 与真实样本同形。
+
+**Held-out Script Pool (留出剧本池)**:
+模拟器剧本池按 8:2 切分，20% 剧本不参与任何训练数据生产，专供抗剧本过拟合评估（模型在未见剧本上的表现是本阶段核心验收门禁）。
+_Avoid_: 与 Golden Dataset 混淆——黄金集按样本抽，留出剧本池按剧本整体切。
+
+**Pseudo-real Domain (伪真实域)**:
+自测混合加权逻辑时，指定 1 台模拟器设备在训练脚本中临时标记为 real 域，验证加权与分层评估报告正确性；仅是测试手段，不产出上线模型。
+
+**Cold-start SOP (冷启动 SOP)**:
+真实家庭接入后的标准作业流程：采样积累 → 标注率监控 → 按 PRD W8→W14 MAE 阶梯训练 → 灰度三步上线。硬件到位前成稿，到位即执行。
+
 ## Relationships
 
 - 一次**事件打点**（5 类事件）触发 **Weak Label** 采集，并可生成 **Anchor Sample**（feeding 除外）；双机重复打点按 (device_id, event_type, 10min 窗口) 合并，owner 优先

@@ -7,6 +7,10 @@
               B 级=sq≥40 的其余样本（含自动标签）-> 权重 0.7；C 级=sq<40 -> 剔除
   - 单设备样本占比 ≤ 25%（超出随机下采样）
   - 黄金集 label_source='golden' 只评估不训练（剔除出训练池）
+  - Domain 划分（ADR-0003 决策 3）：读取 simulator_devices.txt 清单打 simulator/real 域标，
+    零 DB 迁移；v2.1 仅打标与分布报告，混合加权开关属 v2.2
+  - Held-out Script Pool（ADR-0003 决策 2）：heldout_devices.txt 设备跑留出剧本，
+    其样本剔除出训练池，专供 evaluate.py 抗过拟合评估
   - stratify 按 label 一位小数分桶；固定超参 n=100/depth=4/lr=0.1/subsample=0.8
   - MAE 门禁默认 0.30；导出前 onnxruntime 与 booster 交叉校验（max|Δ| < 1e-5）
 输出：risk_model_YYYYMMDD.onnx（输入 float_input [None,15]，metadata 含 feature_spec_version）
@@ -17,6 +21,7 @@
 """
 import argparse
 import datetime
+import os
 import sys
 
 import numpy as np
@@ -33,6 +38,15 @@ FEATURE_SPEC_VERSION = "1.5.0"
 # posture 数字编码（ADR-0002）：DB 列为 smallint，0/1/2/3 直传；兼容历史字符串值
 POSTURE_MAP = {"supine": 0, "side": 1, "prone": 2, "active": 3}
 MAX_DEVICE_SHARE = 0.25
+MODEL_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def read_device_list(path: str) -> set:
+    """读取设备清单文件（每行一个 device_id，# 注释）；文件不存在返回空集。"""
+    if not os.path.exists(path):
+        return set()
+    with open(path) as f:
+        return {ln.strip() for ln in f if ln.strip() and not ln.startswith("#")}
 
 
 def load_data(pg_url: str) -> pd.DataFrame:
@@ -40,7 +54,7 @@ def load_data(pg_url: str) -> pd.DataFrame:
 
     engine = create_engine(pg_url)
     df = pd.read_sql("""
-        SELECT device_id, hr_mean, hr_std, hr_trend, hrv_rmssd,
+        SELECT device_id, ts, hr_mean, hr_std, hr_trend, hrv_rmssd,
                motion_mean, motion_max, motion_std, posture,
                temp_mean, temp_trend, signal_quality_avg,
                time_of_day, is_night, hours_since_feeding, hours_since_sleep,
@@ -84,6 +98,10 @@ def main() -> None:
     ap.add_argument("--pg", required=True, help="PostgreSQL 连接串")
     ap.add_argument("--out", default=None, help="默认 risk_model_YYYYMMDD.onnx")
     ap.add_argument("--mae-target", type=float, default=0.30)
+    ap.add_argument("--sim-list", default=os.path.join(MODEL_DIR, "simulator_devices.txt"),
+                    help="模拟器设备清单（Domain 划分，清单外默认 real）")
+    ap.add_argument("--heldout-list", default=os.path.join(MODEL_DIR, "heldout_devices.txt"),
+                    help="Held-out 剧本池设备清单（样本剔除出训练，仅供评估）")
     args = ap.parse_args()
 
     version = datetime.date.today().strftime("%Y%m%d")
@@ -91,6 +109,20 @@ def main() -> None:
 
     df = load_data(args.pg)
     print(f"原始样本: {len(df)}  类型分布:\n{df['sample_type'].value_counts()}")
+
+    # Domain 划分（ADR-0003 决策 3）：清单内 simulator，清单外默认 real；v2.1 仅打标报告
+    sim_devices = read_device_list(args.sim_list)
+    df["domain"] = np.where(df["device_id"].isin(sim_devices), "simulator", "real")
+    dom = df.groupby("domain")["device_id"].agg(["count", "nunique"])
+    print(f"Domain 分布:\n{dom}")
+
+    # Held-out Script Pool 设备：样本专供抗过拟合评估，剔除出训练
+    heldout_devices = read_device_list(args.heldout_list)
+    held_mask = df["device_id"].isin(heldout_devices)
+    if held_mask.any():
+        print(f"Held-out 剧本池设备剔除出训练: {int(held_mask.sum())} 条 "
+              f"（{sorted(df.loc[held_mask, 'device_id'].unique())}）")
+        df = df[~held_mask].copy()
 
     golden = df[df["label_source"] == "golden"]
     train_pool = df[df["label_source"] != "golden"].copy()
