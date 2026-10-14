@@ -253,7 +253,7 @@ def setup_accounts(device, idx):
     baby_id = bound_device(owner)
     if baby_id is None:
         r = api_call("POST", "/api/v1/babies",
-                     {"name": f"sim-{device}", "gender": "unknown",
+                     {"name": f"sim-{device}", "gender": "boy" if idx % 2 == 0 else "girl",
                       "birth_date": "2026-03-01", "bind_code": bind_code}, owner)
         baby_id = (r.get("data") or {}).get("baby_id")
         if baby_id is None:  # 可能设备已绑在旧宝宝上被抢占，重查

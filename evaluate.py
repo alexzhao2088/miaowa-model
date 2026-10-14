@@ -26,10 +26,13 @@ import numpy as np
 import onnxruntime as ort
 import pandas as pd
 
-from train_xgboost import (FEATURE_COLS, MODEL_DIR, assign_weights, load_data,
+from train_xgboost import (FEATURE_COLS, MODEL_DIR, assign_weights,
+                           cap_single_device, load_data, make_val_split,
                            read_device_list)
 
 GOLDEN_WINDOW_MIN = 20  # 黄金事件对照窗口（±min），覆盖锚点 15min 窗 + 打点延迟
+SPLIT_CONTRACT = "v2"  # 与 train_xgboost.py 共用 make_val_split；v1 历史记录的
+                       # 验证集口径因行序不一致不可比，回归对比只对照同契约版本
 
 
 def predict(sess, X):
@@ -37,12 +40,10 @@ def predict(sess, X):
 
 
 def validation_mae(df):
-    """与 train_xgboost.py 同种子同 stratify 的 20% 验证集 MAE。"""
-    from sklearn.model_selection import train_test_split
-    pool = df.reset_index(drop=True)
-    idx = np.arange(len(pool))
-    _, val_idx = train_test_split(idx, test_size=0.2, random_state=42,
-                                  stratify=np.round(pool["label"].astype(float), 1))
+    """与 train_xgboost.py 完全同口径的 20% 验证集 MAE（split contract v2）：
+    同序数据（load_data ORDER BY）+ 同质量分级/单设备上限 + 共用 make_val_split。"""
+    pool = cap_single_device(assign_weights(df.copy())).reset_index(drop=True)
+    _, val_idx = make_val_split(pool)
     val = pool.iloc[val_idx]
     return float(val["abs_err"].mean()), len(val)
 
@@ -90,8 +91,13 @@ def golden_hit_rate(df, pg_url, devices):
         c = cand[cand["device_id"] == dev]
         if c.empty:
             continue
-        ts = c["ts"].to_numpy()
+        ts_ser = c["ts"]
+        if ts_ser.dt.tz is not None:  # timestamptz -> UTC 朴素时间，与 golden ts 对齐
+            ts_ser = ts_ser.dt.tz_convert("UTC").dt.tz_localize(None)
+        ts = ts_ser.to_numpy()
         for t in g["ts"]:
+            if getattr(t, "tzinfo", None) is not None:
+                t = t.tz_convert("UTC").tz_localize(None)
             lo, hi = np.datetime64(t - win), np.datetime64(t + win)
             hit_idx.update(c.index[(ts >= lo) & (ts <= hi)].tolist())
     near = cand.loc[sorted(hit_idx)]
@@ -140,10 +146,14 @@ def main() -> None:
     # [1] 绝对 MAE（回归监控，非硬门禁；显著劣于上版才 FAIL）
     mae, n_val = validation_mae(train_df)
     gate1 = "PASS"
-    if prev and prev.get("mae") is not None and mae > prev["mae"] + args.regression_margin:
+    prev_same_contract = prev if prev and prev.get("split_contract") == SPLIT_CONTRACT else None
+    if prev_same_contract and prev_same_contract.get("mae") is not None \
+            and mae > prev_same_contract["mae"] + args.regression_margin:
         gate1 = "FAIL"
-    print(f"\n[1] 验证集 MAE: {mae:.4f}（n={n_val}，上版 {prev['mae']:.4f}，回归监控 margin={args.regression_margin}）{gate1}"
-          if prev and prev.get("mae") is not None else
+    print(f"\n[1] 验证集 MAE: {mae:.4f}（n={n_val}，上版 {prev_same_contract['mae']:.4f}，回归监控 margin={args.regression_margin}）{gate1}"
+          if prev_same_contract and prev_same_contract.get("mae") is not None else
+          f"\n[1] 验证集 MAE: {mae:.4f}（n={n_val}，划分契约 {SPLIT_CONTRACT} 基线重置，回归监控不判定）{gate1}"
+          if prev and prev.get("split_contract") != SPLIT_CONTRACT else
           f"\n[1] 验证集 MAE: {mae:.4f}（n={n_val}，首版记录基线，回归监控不判定）{gate1}")
     gates["mae_regression"] = gate1
 
@@ -214,6 +224,7 @@ def main() -> None:
         "lodo_mean": lodo, "lodo_per_device": per_dev,
         "sq_mid_mae": mae_mid, "sq_high_mae": mae_high, "sq_gap": sq_gap,
         "golden_hit": hit, "golden_n": n_gold, "gates": gates,
+        "split_contract": SPLIT_CONTRACT,
     }
     history.append(record)
     with open(args.history, "w") as f:

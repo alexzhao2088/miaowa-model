@@ -1,0 +1,55 @@
+{
+  "seed": 42,
+  "pool_size": 10,
+  "train_scripts": [
+    "s01",
+    "s02",
+    "s03",
+    "s04",
+    "s05",
+    "s06",
+    "s07",
+    "s08"
+  ],
+  "heldout_scripts": [
+    "s09",
+    "s10"
+  ],
+  "devices": {
+    "MW-SIM-1": {
+      "script": "s01",
+      "archetype": "regular",
+      "role": "train"
+    },
+    "MW-SIM-2": {
+      "script": "s02",
+      "archetype": "night_waking",
+      "role": "train"
+    },
+    "MW-SIM-3": {
+      "script": "s03",
+      "archetype": "fragmented_naps",
+      "role": "train"
+    },
+    "MW-SIM-4": {
+      "script": "s04",
+      "archetype": "regular",
+      "role": "train"
+    },
+    "MW-SIM-5": {
+      "script": "s05",
+      "archetype": "night_waking",
+      "role": "train"
+    },
+    "MW-HOLD-1": {
+      "script": "s09",
+      "archetype": "fragmented_naps",
+      "role": "heldout"
+    },
+    "MW-HOLD-2": {
+      "script": "s10",
+      "archetype": "regular",
+      "role": "heldout"
+    }
+  }
+}

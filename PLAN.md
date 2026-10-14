@@ -95,6 +95,9 @@ P0 → P3 ──────┤（P1/P2 与 P3 可并行：Java vs Python）
 | P5 Shadow/灰度 | ✅ | e2e 48/48（含 I1-I3 灰度用例）；spec=9.9.9 模型拒载回退纯规则验证通过；analyze_shadow.py 达标判定 PASS |
 | P6 灰度演练 | ✅ | Shadow 一致率 80.7%≥70%；low 阶段误推 0 不升；target 融合准确率 83.3%≥60%；回滚 3s≤30s；e2e 48/48 全绿 |
 
+| v2.1 模拟器 v2 + 门禁（2026-10-11 完成） | ✅ | 四波跑量（含夜间 22:00-06:00 对照窗 + 白天补多样性波），样本 766 条（锚点 297/过渡 286/对照 183，held-out 设备 184 条）；出模型 risk_model_20261011.onnx，五项门禁全过：held-out 差值 0.0479<0.08、LODO 0.2124 不劣化、sq 分层差值 0.0243<0.05、黄金命中率 98.02%≥60%、验证集 MAE 0.1072（契约 v2 基线）。关键修复：发现并修复验证集划分契约不一致缺陷（cap_single_device 重排行序导致 evaluate.py 验证集落在训练集内、口径虚低，0.0492 vs 诚实口径 0.1072），make_val_split 升为两侧共用（split contract v2），load_data 增加 ORDER BY 定序；旧评估记录口径不可比，门禁 1 基线重置。已知缺陷遗留：后端 AutoLabelService 对照条件 motion<基线×0.3 不可达（基线 25s 跟踪睡眠体动，MW-TEST 三周 0 条佐证），离线采集器 harvest_contrast.py 以绝对静止阈值 0.014 替代，后端修复列入真实数据阶段待办 |
+| v2.2 域混合加权（2026-10-11 完成） | ✅ | --domain-mix 开关上线（real ×2.0，sim=0.85）+ --pseudo-real-device 自测开关 + 域分层报告；出模型 risk_model_20261011_dm.onnx，五项门禁全过且全面不劣于 v2.1（验证集 MAE 0.1016、held-out 差值 0.0516、LODO 0.2124、sq 差值 0.0273、黄金 98.02%，real 域 MAE 0.0221）；冷启动 SOP 成稿（docs/cold-start-sop.md）；公开数据集调研完成（结论：无集可直接预训练，picsdb + wearable-sensors-infant 可作特征校准域）。发布上线（publish_model.py 指针切换）留待人工拍板 |
+
 备注：本机宿主 Redis 抢占 6379，miaowa 指针读写一律 `docker exec miaowa-redis redis-cli`（publish_model.py 已内置）。
 
 ## 真姿态改造（2026-09-07，ADR-0002）
