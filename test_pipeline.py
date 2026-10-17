@@ -66,12 +66,13 @@ def test_split_strata_dtype_stable():
 
 def test_assign_weights():
     df = pd.DataFrame({
-        "signal_quality_avg": [80.0, 60.0, 30.0, 90.0, 90.0],
-        "label_source": ["weak_label", "weak_label", "weak_label", "synthetic", "auto_sample"],
-        "device_id": ["d"] * 5,
+        "signal_quality_avg": [80.0, 60.0, 30.0, 90.0, 90.0, 90.0, 60.0, 85.0],
+        "label_source": ["weak_label", "weak_label", "weak_label", "synthetic", "auto_sample",
+                         "cry_detect", "cry_detect", "alert_feedback"],
+        "device_id": ["d"] * 8,
     })
     out = tx.assign_weights(df)
-    assert len(out) == 4, "sq<40 的 C 级样本未剔除"
+    assert len(out) == 7, "sq<40 的 C 级样本未剔除"
     assert out.loc[out["signal_quality_avg"] == 80.0, "sample_weight"].iloc[0] == 1.0, \
         "A级 weak_label 权重应为 1.0"
     assert out.loc[out["signal_quality_avg"] == 60.0, "sample_weight"].iloc[0] == 0.7, \
@@ -79,6 +80,14 @@ def test_assign_weights():
     assert out.loc[out["label_source"] == "synthetic", "sample_weight"].iloc[0] == 1.0
     assert out.loc[out["label_source"] == "auto_sample", "sample_weight"].iloc[0] == 0.7, \
         "非锚点类标签默认 B 级 0.7"
+    # ADR-0004 决策 2：cry_detect / alert_feedback 为确认型标注，sq≥70 升 A 级
+    cry = out[out["label_source"] == "cry_detect"]
+    assert cry.loc[cry["signal_quality_avg"] == 90.0, "sample_weight"].iloc[0] == 1.0, \
+        "cry_detect sq≥70 应升 A 级 1.0"
+    assert cry.loc[cry["signal_quality_avg"] == 60.0, "sample_weight"].iloc[0] == 0.7, \
+        "cry_detect sq<70 仍为 B 级 0.7"
+    assert out.loc[out["label_source"] == "alert_feedback", "sample_weight"].iloc[0] == 1.0, \
+        "alert_feedback sq≥70 应升 A 级 1.0"
 
 
 def test_cap_single_device():

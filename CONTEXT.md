@@ -25,7 +25,7 @@ anchor : contrast : transition = 1 : 1.5 : 0.5。
 _Avoid_: 旧代码口径 0.9/0.1/0.5（已废弃）
 
 **Quality Grade (质量分级)**:
-A 级 = signal_quality ≥ 70 且有人工事件锚点（权重 1.0）；B 级 = sq ≥ 40 或自动标签 confidence > 0.7（权重 0.7）；C 级 = sq < 40 或 time_unreliable（不进训练）。
+A 级 = signal_quality ≥ 70 且有**确认型标注**（权重 1.0）——三类来源：weak_label（人工事件锚点）、cry_detect（哭声强标注，label=1.0，后端口径置信度高于人工打点）、alert_feedback（家长回访 confirmed/false_positive）；B 级 = sq ≥ 40 的其余样本（含自动标签，权重 0.7）；C 级 = sq < 40 或 time_unreliable（不进训练）。_2026-10-15 修订（ADR-0004 决策 2）：A 级由仅 weak_label 扩至三类确认型标注。_
 
 **Weak Label (弱标注)**:
 事件打点后收集的三个布尔量 did_wake / did_cry / did_intervene，null（不确定）不参与训练。
@@ -60,6 +60,14 @@ _Avoid_: 与 Golden Dataset 混淆——黄金集按样本抽，留出剧本池�
 
 **Cold-start SOP (冷启动 SOP)**:
 真实家庭接入后的标准作业流程：采样积累 → 标注率监控 → 按 PRD W8→W14 MAE 阶梯训练 → 灰度三步上线。硬件到位前成稿，到位即执行。
+
+**Standby Phase (待命期 / Phase S)**:
+ADR-0004 定义的冷启动衔接期前半段：v2.x 窗口期满且真实数据未入场之间的状态。只做五件事（发布收口 / 训练语义补齐 / 公开数据校准 / 模拟器降频回归 / 真实数据期待办固化），不出新上线模型（回归模型记号 v2.2-rN 仅留档），真实数据首版模型起 v3.0。
+_Avoid_: 与"空转训练"混淆——待命期禁止无目的扩量跑版本，回归跑量只为保持管线热度与留档
+
+**Feature Calibration Domain (特征校准域)**:
+公开婴儿数据集（picsdb / wearable-sensors-infant）的定位：只用真实分布校准 **Device Simulator** 的生成器参数（hr/hrv 分布、sq 先验、SQI→signal_quality_avg 映射），不产出训练样本、不进训练池、不改 **Feature Contract**。与 Domain（simulator/real 二值划分）不是同一概念——校准域不构成第三个训练域。
+_Avoid_: 预训练域、混合训练域（ADR-0003 决策 7 与 ADR-0004 决策 3 均否决直接接入训练）
 
 ## Relationships
 

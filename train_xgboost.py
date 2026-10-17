@@ -3,7 +3,8 @@
 妙娃风险评分模型训练脚本（特征契约 v1.5.0，15 维，posture 数字编码见 ADR-0002）
 数据：training_features（锚点 1.0 / 对照 0.0 / 中间 0.3-0.5，配比 1:1.5:0.5）
 规则：
-  - 质量分级：A 级=人工锚点(label_source=weak_label)且 sq≥70 -> 权重 1.0；
+  - 质量分级（ADR-0004 决策 2）：A 级=确认型标注（weak_label 人工锚点 / cry_detect 哭声强标注
+              / alert_feedback 家长回访）且 sq≥70 -> 权重 1.0；
               B 级=sq≥40 的其余样本（含自动标签）-> 权重 0.7；C 级=sq<40 -> 剔除
   - 单设备样本占比 ≤ 25%（超出随机下采样）
   - 黄金集 label_source='golden' 只评估不训练（剔除出训练池）
@@ -92,8 +93,10 @@ def make_val_split(pool: pd.DataFrame, test_size: float = 0.2, seed: int = 42):
 def assign_weights(df: pd.DataFrame) -> pd.DataFrame:
     """质量分级 -> sample_weight；C 级剔除。golden 只评估不训练。"""
     sq = df["signal_quality_avg"].astype(float)
-    is_anchor_human = df["label_source"] == "weak_label"
-    df["sample_weight"] = np.where(is_anchor_human & (sq >= 70), 1.0, 0.7)
+    # 确认型标注（ADR-0004 决策 2）：cry_detect 后端口径置信度高于人工打点，
+    # alert_feedback 为家长回访 confirmed/false_positive 直接写 label
+    is_confirmed = df["label_source"].isin(["weak_label", "cry_detect", "alert_feedback"])
+    df["sample_weight"] = np.where(is_confirmed & (sq >= 70), 1.0, 0.7)
     df.loc[df["label_source"] == "synthetic", "sample_weight"] = 1.0  # 管线验证数据视为 A 级
     kept = df[(sq >= 40) | (df["label_source"] == "synthetic")].copy()
     dropped = len(df) - len(kept)

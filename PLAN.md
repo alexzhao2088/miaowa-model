@@ -97,6 +97,7 @@ P0 → P3 ──────┤（P1/P2 与 P3 可并行：Java vs Python）
 
 | v2.1 模拟器 v2 + 门禁（2026-10-11 完成） | ✅ | 四波跑量（含夜间 22:00-06:00 对照窗 + 白天补多样性波），样本 766 条（锚点 297/过渡 286/对照 183，held-out 设备 184 条）；出模型 risk_model_20261011.onnx，五项门禁全过：held-out 差值 0.0479<0.08、LODO 0.2124 不劣化、sq 分层差值 0.0243<0.05、黄金命中率 98.02%≥60%、验证集 MAE 0.1072（契约 v2 基线）。关键修复：发现并修复验证集划分契约不一致缺陷（cap_single_device 重排行序导致 evaluate.py 验证集落在训练集内、口径虚低，0.0492 vs 诚实口径 0.1072），make_val_split 升为两侧共用（split contract v2），load_data 增加 ORDER BY 定序；旧评估记录口径不可比，门禁 1 基线重置。已知缺陷遗留：后端 AutoLabelService 对照条件 motion<基线×0.3 不可达（基线 25s 跟踪睡眠体动，MW-TEST 三周 0 条佐证），离线采集器 harvest_contrast.py 以绝对静止阈值 0.014 替代，后端修复列入真实数据阶段待办 |
 | v2.2 域混合加权（2026-10-11 完成） | ✅ | --domain-mix 开关上线（real ×2.0，sim=0.85）+ --pseudo-real-device 自测开关 + 域分层报告；出模型 risk_model_20261011_dm.onnx，五项门禁全过且全面不劣于 v2.1（验证集 MAE 0.1016、held-out 差值 0.0516、LODO 0.2124、sq 差值 0.0273、黄金 98.02%，real 域 MAE 0.0221）；冷启动 SOP 成稿（docs/cold-start-sop.md）；公开数据集调研完成（结论：无集可直接预训练，picsdb + wearable-sensors-infant 可作特征校准域）。发布上线（publish_model.py 指针切换）留待人工拍板 |
+| 衔接期启动（2026-10-15，ADR-0004） | 🔄 | 4 周窗口期满、真实数据未入场 → 按出口约定转待命。ADR-0004 与 PLAN 衔接期章节成稿（Phase S 五项 + Phase C 微调策略层，真实数据模型起 v3.0）；S2 训练语义补齐落地：assign_weights A 级扩至 weak_label/cry_detect/alert_feedback 三类确认型标注，test_pipeline 8/8 全绿；本地 model:current=risk_model_20261011_dm.onnx、phase=target 已确认。待办：S1 生产分发（依赖部署线 MinIO 修复）、S3 公开数据校准（2 周时间盒 ~10-29）、S4 每周降频回归、S5 两项后端修复列入 Phase C 第一周 |
 
 备注：本机宿主 Redis 抢占 6379，miaowa 指针读写一律 `docker exec miaowa-redis redis-cli`（publish_model.py 已内置）。
 
@@ -135,3 +136,46 @@ TODO(硬件)：六面静置测试确认 IMU 轴定义 → 修正 FeatureService 
 - 飞书《AI模型落地类文档》本阶段不同步；真实数据阶段口径实际修订时再同步。
 - 风险残留：模拟器 v2 剧本池仍是人工分布，与真实婴儿的 gap 只能延迟到冷启动阶段用真实数据重估（ADR-0003）。
 - 公开数据集调研结论追加到本节附录（W1 内完成）。
+
+## 下一阶段：冷启动衔接期微调训练计划（2026-10-15 起，ADR-0004）
+
+> 定位：v2.2 交付、ADR-0003 四周窗口期满，硬件/真实婴儿仍未到位 → 按出口约定转**冷启动待命**。本阶段不虚训、不空转：待命期（Phase S）收口遗留缺口并保持管线热度，真实数据入场即切冷启动执行期（Phase C，SOP 主体已就位，本节补微调策略层）。
+> 决策记录见 [docs/adr/0004](./docs/adr/0004-standby-phase-and-cold-start-transition.md)；术语见 [CONTEXT.md](./CONTEXT.md)（Standby Phase / Feature Calibration Domain）。
+
+### 事实基线（2026-10-15 核查）
+
+- 在架模型 v2.2 `risk_model_20261011_dm.onnx`：五项门禁全过（MAE 0.1016 / held-out 差值 0.0516 / LODO 0.2124 / sq 差值 0.0273 / 黄金 98.02%），本地 `model:current` 已指向、`model:phase=target`。
+- 样本库 786 条（weak_label 402 / auto_sample 338 / cry_detect 19 / alert_feedback 7），全部 sim/e2e/测试域，**零真实婴儿样本**。
+- 生产云部署进行中：MinIO 未修复，生产在架仍为旧版 `miaowa_xgb.onnx`，模型分发链路未通（见 miaowa-deploy-handoff.md）。
+- 模拟器 2026-10-11 后停跑。
+
+### Phase S：待命期（现在 → 真实数据入场）
+
+| # | 工作项 | 内容 | 时间盒 | 出口 |
+|---|--------|------|--------|------|
+| S1 | 发布与生产分发收口 | 部署线 MinIO 修复后：`risk_model_20261011_dm.onnx` 上传生产 MinIO models bucket + 生产 Redis `model:current` 切换；生产后端校验 feature_spec 1.5.0 匹配可加载 | 随部署序列 | 生产 `model:current=dm` 且后端加载成功 |
+| S2 | 训练语义补齐 | `assign_weights` A 级扩至三类确认型标注（weak_label / cry_detect / alert_feedback，ADR-0004 决策 2）；test_pipeline.py 增补分级用例 | 2026-10-15 | ✅ 已完成（代码+自测全绿） |
+| S3 | 公开数据集特征校准 | picsdb（ODbL，内部使用）→ RR 间期提取 → 0-12 月龄 hr_mean/hr_std/hr_trend/hrv_rmssd 分布表 → 校准模拟器心率生成器；wearable-sensors-infant（CC BY 4.0，踝部子集优先）→ sq 分布先验 + SQI→signal_quality_avg 映射。**仅校准不进训练**（ADR-0004 决策 3） | 2 周（~10-29） | 校准参数表 JSON + 模拟器参数更新 + 校准报告（追加调研文档） |
+| S4 | 模拟器降频回归 | 每周 1 次 24h 压缩跑量（7 设备）→ harvest_contrast → train → evaluate 五项门禁留档（版本记号 v2.2-rN，**不上线**）；S3 校准落地当周出对比模型留档；门禁回归失败即排查 | 持续每周 | eval_history 连续留档、无未解释 FAIL |
+| S5 | 真实数据期待办固化 | ① IMU 六面静置测试 → FeatureService 姿态常量修正 → 契约 1.5.1 → 全量重训（ADR-0002 TODO）② AutoLabelService 对照条件修复（motion<基线×0.3 不可达 → 对齐 harvest_contrast 绝对静止阈值口径）。两项均为后端 Java 改动，列入 Phase C 第一周 | 硬件到位即做 | 列入 Phase C 启动清单 |
+
+### Phase C：冷启动执行期（真实数据入场触发，主体 = docs/cold-start-sop.md）
+
+触发判定（SOP 第 0 节）：非 `simulator_devices.txt` 设备产生 label_source ∈ {weak_label, auto_sample, cry_detect, alert_feedback} 的 `training_features`。微调策略层补充：
+
+| # | 策略 | 口径 |
+|---|------|------|
+| C1 | 版本线与主门禁 | 真实数据模型起 **v3.0**（W8，real ≥1000，MAE <0.30）→ v3.1（W11，real ≥3000，<0.24）→ v3.2（W14，real ≥5000，<0.18）；PRD 绝对 MAE 阶梯恢复主门禁（ADR-0004 决策 4） |
+| C2 | 辅助门禁 | v2.x 四项相对门禁每版全跑转辅助监控；**held-out 剧本门禁在 real 占比 ≥50% 后降报告项**；任何一版不得显著劣于上版（margin 0.05） |
+| C3 | 域权重衰减 | `--domain-mix` 公式自动衰减（real ×2.0，sim = max(0.3, 1−2×real占比)）；real ≥35% sim 触下限 0.3 时评估模拟器退出；real ≥1000 且连续两版门禁全过 → 模拟器转纯回归/门禁数据源 |
+| C4 | 黄金集双轨 | 真实黄金集（A 级确认型标注分层抽 10%，只评估不训练）与剧本真相 golden_events 并存报告；真实黄金集 n≥100 后以真实口径为准 |
+| C5 | 契约 1.5.1 重训 | S5 两项后端修复落地即升 feature_spec_version=1.5.1（维度不变），全部在架模型重训重评估，eval_history 注明口径切换 |
+| C6 | 标注率监控 | SOP 第 2 节：打点率 <50% 或弱标注率 <40% 持续 3 天 → 先治标注不硬训；单设备占比 >25% 周报点名 |
+| C7 | 灰度三步 | SOP 第 4 节：Shadow ≥48h（一致率 ≥70%）→ low ≥24h（误推 0）→ target（融合准确率 ≥60%）；PRD Phase 3 验收：MAE <0.2、自动标签 >100 条/设备/日 |
+
+### 边界与风险
+
+- 特征契约冻结 1.5.0（Phase S）；1.5.1 仅为硬件常量补丁（维度不变，ADR-0004 决策 5）。
+- Phase S 不出新上线模型；后端 Java / e2e（58 用例）不动；生产环境操作走部署交接序列，本计划不越权执行。
+- 飞书《AI模型落地类文档》本阶段不同步；Phase C 门禁口径切换与契约 1.5.1 时同步修订飞书数据字典/落地文档。
+- 风险：picsdb 早产儿 ICU 分布与足月家庭婴儿有差（分层校准、报告注明）；ODbL ShareAlike（仅内部使用不触发，处理产物不对外分发）；S3 校准改变模拟器分布后门禁 1 基线需在 eval_history 注明重置；待命期过长导致管线锈蚀由 S4 每周回归兜底。
