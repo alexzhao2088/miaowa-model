@@ -92,3 +92,9 @@ _Avoid_: 预训练域、混合训练域（ADR-0003 决策 7 与 ADR-0004 决策 
 - ~~"Shadow" 双重含义~~ → `ShadowService`=设备影子；`ModelShadowService`=模型影子（灰度第一阶段）。
 - ~~`posture` 语义冲突~~ → ~~motion 代理~~ **二次裁决（2026-09-07）**：IMU accel 三分量 + 固定轴阈值判真姿态（0仰卧/1侧卧/2俯卧/3活动），硬件固定左脚佩戴，见 docs/adr/0002（作废 0001）。
 - ~~`time_of_day` sin/cos 矛盾~~ → 保持 15 维，原始小时 0-23，字典删 sin/cos 表述。
+
+## Phase S 工具（2026-11-18 落地）
+
+- `s3_calibrate.py`：picsdb 流式校准（QRS→RR→契约窗口分布表→模拟器区间对照报告），产物在 `docs/calibration/`。重跑：`python3 s3_calibrate.py`（需 wfdb，Open Access 无需认证）
+- `weekly_regression.sh`：S4 每周回归编排（跑量→harvest→train→五项门禁留档，v2.2-rN 不上线；本地栈未就绪自动 SKIP）。launchd `com.miaowa.weekly-regression` 周一 03:07
+- `phase_c_watch.py`：Phase C 触发值守——近 14 天非模拟器/测试设备出现确认型标注样本即退出码 42 告警。launchd `com.miaowa.phase-c-watch` 每日 08:17；查生产库用 `PG_DSN` 环境变量
